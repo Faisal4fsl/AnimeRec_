@@ -1,4 +1,3 @@
-
 import os
 import pandas as pd
 import streamlit as st
@@ -32,7 +31,9 @@ def load_data():
     users_similarity = pkl.load(open('user_similarity.pkl', 'rb'))
     return anime, similarity, users_based_id, users_similarity
 
-# Function to fetch anime poster
+anime, similarity, users_based_id, users_similarity = load_data()
+
+# Cache poster fetching to avoid repeated network requests
 @st.cache_data
 def fetch_poster(anime_id):
     url = f"https://api.jikan.moe/v4/anime/{anime_id}"
@@ -44,31 +45,25 @@ def fetch_poster(anime_id):
         image_url = images['jpg']['image_url']
         return image_url
     else:
-        return "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTnbhCVUg--rMQGw44l63AsHs5DndvLIctKDg&s"  # New placeholder image URL
+        return "https://images.app.goo.gl/nraGJmA37NsVeZ9B7"  # Placeholder image URL if not found
 
 # Function to get top N recommendations
-@st.cache_data
 def get_top_recommendations(distances, N=5):
     return sorted(list(enumerate(distances)), reverse=True, key=lambda x: x[1])[1:N+1]
 
 # Content-based recommendation
-@st.cache_data
-def recommend(anime_name, anime, similarity, users_based_id, users_similarity):
+def recommend(anime_name):
     anime_index = anime[anime['name'] == anime_name].index[0]
     distances = similarity[anime_index]
     anime_list = get_top_recommendations(distances)
     return [anime.iloc[i[0]]['anime_id'] for i in anime_list]
 
 # User-based recommendation
-@st.cache_data
-def recommend_user(name_anime, anime, users_based_id, users_similarity):
+def recommend_user(name_anime):
     anime_index = users_based_id[users_based_id.name == name_anime].index.values[0]
     distances = users_similarity[anime_index]
     anime_list = get_top_recommendations(distances)
     return [users_based_id.iloc[i[0]]['anime_id'] for i in anime_list]
-
-# Load data initially and show loading message
-anime, similarity, users_based_id, users_similarity = load_data()
 
 # Create Streamlit app
 st.header('What anime to watch next?')
@@ -82,33 +77,28 @@ if chosen_anime:
     st.image(fetch_poster(anime[anime.name == chosen_anime]['anime_id'].values[0]), width=50)
 
     if st.button('Recommend'):
-        st.text('Fetching recommendations...')
-        
-        similar_animes_id = recommend(chosen_anime, anime, similarity, users_based_id, users_similarity)
-        user_liked_anime_id = recommend_user(chosen_anime, anime, users_based_id, users_similarity)
+        similar_animes_id = recommend(chosen_anime)
+        user_liked_anime_id = recommend_user(chosen_anime)
 
-        # Fetch posters
         similar_animes_poster = [fetch_poster(anime_id) for anime_id in similar_animes_id]
         user_liked_anime_poster = [fetch_poster(anime_id) for anime_id in user_liked_anime_id]
 
-        # Display recommendations
+        similar_animes = [anime[anime['anime_id'] == i]['name'].values[0] for i in similar_animes_id]
+        user_liked_anime = [anime[anime['anime_id'] == i]['name'].values[0] for i in user_liked_anime_id]
+
         st.text(' ')
         st.text(' ')
         st.write('Similar animes:')
-        cols = st.columns(5)
-        for i, col in enumerate(cols):
-            with col:
-                st.text(anime[anime['anime_id'] == similar_animes_id[i]]['name'].values[0])
-                st.image(similar_animes_poster[i])
+        for i in range(5):
+            st.text(similar_animes[i])
+            st.image(similar_animes_poster[i])
 
         st.text(' ')
         st.text(' ')
         st.write(f'Users who liked watching {chosen_anime} also liked:')
-        cols = st.columns(5)
-        for i, col in enumerate(cols):
-            with col:
-                st.text(anime[anime['anime_id'] == user_liked_anime_id[i]]['name'].values[0])
-                st.image(user_liked_anime_poster[i])
+        for i in range(5):
+            st.text(user_liked_anime[i])
+            st.image(user_liked_anime_poster[i])
 
         st.text(' ')
         st.text(' ')
